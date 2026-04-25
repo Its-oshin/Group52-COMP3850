@@ -7,7 +7,7 @@
 # -----------------------------------------------------------------------------
 
 # Imports
-#
+
 import math
 import random
 import gzip
@@ -18,6 +18,8 @@ from BF import BF #import the BF module
 from bitarray import bitarray
 import hashlib
 import matplotlib.pyplot as plt
+from sklearn import svm
+
 
 
 COMMON_BLOCKS_MSG = 'number of common blocks:'
@@ -466,3 +468,58 @@ class Link:
     return matches
 
   # ---------------------------------------------------------------------------
+  # train SVM model for matching  
+  def match_svm(self, blk_index1, blk_index2, bf_dict1, bf_dict2, rec_dict1, rec_dict2):
+
+    from sklearn import svm
+
+    X = []
+    y = []
+
+    common_blks = [blk for blk in blk_index1 if blk in blk_index2]
+
+    for blk in common_blks:
+        recs1 = blk_index1[blk]
+        recs2 = blk_index2[blk]
+
+        for r1 in recs1:
+            for r2 in recs2:
+
+                bf1 = bf_dict1[r1]
+                bf2 = bf_dict2[r2]
+
+                sim = self.bf.calc_bf_sim(bf1, bf2)
+
+                X.append([sim])
+
+                if rec_dict1[r1][self.ent_id] == rec_dict2[r2][self.ent_id]:
+                    y.append(1)
+                else:
+                    y.append(0)
+
+    model = svm.SVC(kernel='linear')
+    model.fit(X, y)
+
+    matches = []
+    index = 0
+
+    for blk in common_blks:
+        recs1 = blk_index1[blk]
+        recs2 = blk_index2[blk]
+
+        for r1 in recs1:
+            for r2 in recs2:
+
+                prediction = model.predict([X[index]])[0]
+
+                if prediction == 1:
+                    matches.append([r1, r2])
+
+                index += 1
+
+    print('Number of matching pairs (SVM):', len(matches))
+
+    return matches
+  
+
+  
