@@ -15,7 +15,6 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import precision_score, recall_score, f1_score
 
-
 class LR:
 
     def __init__(self, link):
@@ -64,5 +63,24 @@ class LR:
         print(f'Matches: {sum(labels)}')
 
         return np.array(features), np.array(labels)
+    
+    def train(self, X_train, y_train):
+        self.model.fit(X_train, y_train)
+        self.is_trained = True
+
+    def predict(self, X_test):
+        if not self.is_trained:
+            raise ValueError("Model not trained yet.")
+        return self.model.predict(X_test)
+    
+    def evaluate(self, y_test, y_pred):
+        # Evaluate model performance as per our requirements (precision, recall, F1-score)
+        return (
+            precision_score(y_test, y_pred),
+            recall_score(y_test, y_pred),
+            f1_score(y_test, y_pred)
+        )
+        
+
 
   
