@@ -12,7 +12,8 @@
 # using Bloom filter encoding with differential privacy
 # phonetic blocking, and threshold-based classification. 
 # Baseline methods - non-PPRL and PPRL without differential privacy
-#
+
+# DV's pipeline - read datasets, block, encode, perturb, match and link datasets, and evalaute the performance.
 # -----------------------------------------------------------------------------
 
 # Imports
@@ -437,4 +438,70 @@ class Link:
     plt.ylim(ymin=0.0)
     plt.legend(loc='best')
     plt.show()
-    
+
+
+if __name__ == '__main__':
+
+    link = Link(
+        length=1000,
+        num_hash_func=10,
+        q=2,
+        min_sim_val=0.8,
+        use_attr_index=[1,2,3,4],
+        blk_attr_index=[2,4],
+        ent_id=0,
+        epsilon=7
+    )
+
+    datasets = [
+        ("100_corr_25",
+         r"C:\Users\hieup\Downloads\Group52-COMP3850\Group52-COMP3850\Datasets\Alice_numrec_100_corr_25.csv",
+         r"C:\Users\hieup\Downloads\Group52-COMP3850\Group52-COMP3850\Datasets\Bob_numrec_100_corr_25.csv"),
+
+        ("100_corr_50",
+         r"C:\Users\hieup\Downloads\Group52-COMP3850\Group52-COMP3850\Datasets\Alice_numrec_100_corr_50.csv",
+         r"C:\Users\hieup\Downloads\Group52-COMP3850\Group52-COMP3850\Datasets\Bob_numrec_100_corr_50.csv"),
+
+        ("100_non_corr",
+         r"C:\Users\hieup\Downloads\Group52-COMP3850\Group52-COMP3850\Datasets\Alice_numrec_100_non_corr.csv",
+         r"C:\Users\hieup\Downloads\Group52-COMP3850\Group52-COMP3850\Datasets\Bob_numrec_100_non_corr.csv"),
+
+        ("500_corr_25",
+         r"C:\Users\hieup\Downloads\Group52-COMP3850\Group52-COMP3850\Datasets\Alice_numrec_500_corr_25.csv",
+         r"C:\Users\hieup\Downloads\Group52-COMP3850\Group52-COMP3850\Datasets\Bob_numrec_500_corr_25.csv"),
+
+        ("500_corr_50",
+         r"C:\Users\hieup\Downloads\Group52-COMP3850\Group52-COMP3850\Datasets\Alice_numrec_500_corr_50.csv",
+         r"C:\Users\hieup\Downloads\Group52-COMP3850\Group52-COMP3850\Datasets\Bob_numrec_500_corr_50.csv"),
+
+        ("500_non_corr",
+         r"C:\Users\hieup\Downloads\Group52-COMP3850\Group52-COMP3850\Datasets\Alice_numrec_500_non_corr.csv",
+         r"C:\Users\hieup\Downloads\Group52-COMP3850\Group52-COMP3850\Datasets\Bob_numrec_500_non_corr.csv"),
+    ]       
+
+    print("\n LOGISTIC REGRESSION RESULTS \n")
+
+    for name, alice_path, bob_path in datasets:
+
+        print(f"\n--- Dataset: {name} ---")
+
+        db1 = link.read_database(alice_path)
+        db2 = link.read_database(bob_path)
+
+        blk1 = link.build_BI(db1)
+        blk2 = link.build_BI(db2)
+
+        bf1, _ = link.data_encode(db1)
+        bf2, _ = link.data_encode(db2)
+
+        pbf1 = link.add_DP_noise(bf1)
+        pbf2 = link.add_DP_noise(bf2)
+
+        precision, recall, f1 = link.match_lr(
+            blk1, blk2, pbf1, pbf2, db1, db2
+        )
+
+        print(f"Precision: {precision:.4f}")
+        print(f"Recall:    {recall:.4f}")
+        print(f"F1 Score:  {f1:.4f}")
+
