@@ -13,7 +13,6 @@
 # phonetic blocking, and threshold-based classification. 
 # Baseline methods - non-PPRL and PPRL without differential privacy
 #
-# DV, Aug 2023
 # -----------------------------------------------------------------------------
 
 # Imports
@@ -68,11 +67,7 @@ class Link:
     
     #Create an instace for the BF class with the BF parameters
     self.bf = BF(self.length,self.num_hash_func,self.q)    
-    
-#####################################################
-# ===================================================================
-# ALL CODE BELOW THIS LINE WAS ALREADY IMPLEMENTED
-# ===================================================================
+
 
   def read_database(self, file_name):
     """Load the dataset and store in memory as a dictionary.
@@ -98,7 +93,7 @@ class Link:
       assert rec_id not in rec_dict, ('Record ID not unique:', rec_id)
 
       # Save the original record with the record identifier
-      #
+      
       rec_dict[rec_id] = clean_rec
       rec_count += 1
 
@@ -387,16 +382,6 @@ class Link:
     
     return lr_precision, lr_recall, lr_f1
 
-  # ===================================================================
-  # END OF YOUR ADDITION
-  # ===================================================================
-
-  # ---------------------------------------------------------------------------
-
-  # ===================================================================
-  # EXISTING PLOTTING METHODS (ALREADY THERE)
-  # ===================================================================
-
   #Generate linkage quality comparison graph
   def gen_acc_plot(self, orig_list, base1_list, base2_list):
 
@@ -453,4 +438,3 @@ class Link:
     plt.legend(loc='best')
     plt.show()
     
-##########################################################
