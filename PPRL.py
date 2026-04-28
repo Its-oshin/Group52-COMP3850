@@ -21,6 +21,7 @@ import matplotlib.pyplot as plt
 from sklearn import svm
 from sklearn.linear_model import LogisticRegression
 from sklearn.ensemble import RandomForestClassifier
+from sklearn.neighbors import KNeighborsClassifier
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import precision_score, recall_score, f1_score
 import numpy as np
@@ -451,7 +452,6 @@ class Link:
     return matches, rf_precision, rf_recall, rf_f1
   
  # ---------------------------------------------------------------------------
-
   #SVM Linkage - Jeslin 
   def match_svm(self, blk_index1, blk_index2, bf_dict1, bf_dict2, rec_dict1, rec_dict2):
 
@@ -502,111 +502,62 @@ class Link:
     print('Number of matching pairs (SVM):', len(matches))
 
     return matches
-    
-  # ---------------------------------------------------------------------------
-     
-  # KNN based record linkage using Bloom filter similarities - Xai
-  # build candidate pairs from shared blocks
-  def _build_candidate_pairs(self, blk_index1, blk_index2):
-    """Build candidate record pairs from shared blocks."""
-    common_blks = []
-    candidate_pairs = []
+# ---------------------------------------------------------------------------
+  # KNN - Xai
+  def _collect_similarity_training_data(self, blk_index1, blk_index2, bf_dict1, bf_dict2, rec_dict1, rec_dict2):
+    """Build pairwise similarity features, labels, and record ids for supervised linkage models."""
 
-    for blk in blk_index1:
-      if blk in blk_index2:
-        common_blks.append(blk)
+    common_blks = [blk for blk in blk_index1 if blk in blk_index2]
+    pair_features = []
+    pair_labels = []
+    pair_ids = []
 
     for blk in common_blks:
-      recs_list1 = blk_index1[blk]
-      recs_list2 = blk_index2[blk]
-      for rec1 in recs_list1:
-        for rec2 in recs_list2:
-          candidate_pairs.append([rec1, rec2])
+      recs1 = blk_index1[blk]
+      recs2 = blk_index2[blk]
 
-    return common_blks, candidate_pairs
+      for rec1 in recs1:
+        for rec2 in recs2:
+          bf1 = bf_dict1[rec1]
+          bf2 = bf_dict2[rec2]
+          sim = self.bf.calc_bf_sim(bf1, bf2)
 
-  # ---------------------------------------------------------------------------
-  # balance positive and negative examples for KNN training
-  def _balance_training_examples(self, pos_examples, neg_examples, balance):
-    """Optionally rebalance positive and negative training examples."""
-    if balance != True or len(pos_examples) == 0 or len(neg_examples) == 0:
-      return pos_examples, neg_examples
+          pair_features.append([sim])
+          pair_ids.append([rec1, rec2])
+          pair_labels.append(int(rec_dict1[rec1][self.ent_id] == rec_dict2[rec2][self.ent_id]))
 
-    if len(neg_examples) > len(pos_examples):
-      neg_examples = random.sample(neg_examples, len(pos_examples))
-    elif len(pos_examples) > len(neg_examples):
-      pos_examples = random.sample(pos_examples, len(neg_examples))
+    return common_blks, pair_features, pair_labels, pair_ids
+  
+# ---------------------------------------------------------------------------
+  # KNN - Xai
+  def knn(self, blk_index1, blk_index2, bf_dict1, bf_dict2, rec_dict1, rec_dict2, k=3):
+    """Match and link records using a KNN classifier over Bloom filter similarities."""
 
-    return pos_examples, neg_examples
+    if k < 1:
+      raise ValueError('k must be at least 1')
 
-  # ---------------------------------------------------------------------------
-  # build KNN training set from candidate pairs and bloom filter similarities
-  def _build_knn_training(self, candidate_pairs, rec_dict1, rec_dict2, bf_dict1,
-                          bf_dict2, sample_limit=None, balance=True):
-    """Build a 1D KNN training set using Bloom filter similarities."""
-    pos = []
-    neg = []
-
-    for rec1, rec2 in candidate_pairs:
-      bf1 = bf_dict1[rec1]
-      bf2 = bf_dict2[rec2]
-      sim = self.bf.calc_bf_sim(bf1, bf2)
-      label = 1 if rec_dict1[rec1][self.ent_id] == rec_dict2[rec2][self.ent_id] else 0
-
-      if label == 1:
-        pos.append((sim, label))
-      else:
-        neg.append((sim, label))
-
-    if len(pos) == 0 and len(neg) == 0:
-      raise ValueError('No candidate pairs found for training')
-
-    pos, neg = self._balance_training_examples(pos, neg, balance)
-
-    sampled = pos + neg
-    random.shuffle(sampled)
-
-    if sample_limit is not None and sample_limit < len(sampled):
-      sampled = sampled[:sample_limit]
-
-    if len(sampled) == 0:
-      raise ValueError('Training set is empty after sampling')
-
-    train_sims = [sim for sim, _label in sampled]
-    train_labels = [label for _sim, label in sampled]
-    return train_sims, train_labels
-
-  # ---------------------------------------------------------------------------
-
-  # KNN based matching using bloom filter similarities and trained KNN model
-  def match_knn(self, blk_index1, blk_index2, bf_dict1, bf_dict2, rec_dict1,
-                rec_dict2, k=3, sample_limit=None, balance=True):
-    """Match records using KNN over Bloom filter similarity scores."""
-    common_blks, candidate_pairs = self._build_candidate_pairs(blk_index1, blk_index2)
+    common_blks, pair_features, pair_labels, pair_ids = self._collect_similarity_training_data(
+      blk_index1,
+      blk_index2,
+      bf_dict1,
+      bf_dict2,
+      rec_dict1,
+      rec_dict2,
+    )
     print('Number of common blocks:', len(common_blks))
 
-    train_sims, train_labels = self._build_knn_training(candidate_pairs, rec_dict1,
-                                                        rec_dict2, bf_dict1,
-                                                        bf_dict2, sample_limit,
-                                                        balance)
+    if not pair_features:
+      print('Number of matching pairs (KNN): 0')
+      return []
 
-    k = max(1, min(int(k), len(train_sims)))
-    matches = []
+    knn_model = KNeighborsClassifier(n_neighbors=min(k, len(pair_features)))
+    knn_model.fit(pair_features, pair_labels)
 
-    for rec1, rec2 in candidate_pairs:
-      bf1 = bf_dict1[rec1]
-      bf2 = bf_dict2[rec2]
-      sim = self.bf.calc_bf_sim(bf1, bf2)
+    predictions = knn_model.predict(pair_features)
+    matches = [pair_id for pair_id, prediction in zip(pair_ids, predictions) if prediction == 1]
 
-      dists = [(abs(sim - train_sim), idx) for idx, train_sim in enumerate(train_sims)]
-      dists.sort(key=lambda item: item[0])
-      votes = [train_labels[idx] for (_dist, idx) in dists[:k]]
-      pred = 1 if sum(votes) >= (len(votes) / 2.0) else 0
-
-      if pred == 1:
-        matches.append([rec1, rec2])
-
-    print('Number of matching pairs:', len(matches))
+    print('Number of matching pairs (KNN):', len(matches))
     return matches
   
-##########################################################
+ # ---------------------------------------------------------------------------    
+ 
