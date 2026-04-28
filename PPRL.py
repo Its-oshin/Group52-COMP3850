@@ -521,9 +521,7 @@ class Link:
 
     return matches
   
-  # train Logistic Regression model for matching - TRONG
-  
-def match_lr(self, blk_index1, blk_index2, bf_dict1, bf_dict2, rec_dict1, rec_dict2):
+  def match_lr(self, blk_index1, blk_index2, bf_dict1, bf_dict2, rec_dict1, rec_dict2):
     """Match and link records using Logistic Regression over Bloom filter similarities."""
     from sklearn.linear_model import LogisticRegression
 
@@ -534,18 +532,18 @@ def match_lr(self, blk_index1, blk_index2, bf_dict1, bf_dict2, rec_dict1, rec_di
     print(COMMON_BLOCKS_MSG, len(common_blks))
 
     for blk in common_blks:
-        recs1 = blk_index1[blk]
-        recs2 = blk_index2[blk]
-        for r1 in recs1:
-            for r2 in recs2:
-                bf1 = bf_dict1[r1]
-                bf2 = bf_dict2[r2]
-                sim = self.bf.calc_bf_sim(bf1, bf2)
-                X.append([sim])
-                if rec_dict1[r1][self.ent_id] == rec_dict2[r2][self.ent_id]:
-                    y.append(1)
-                else:
-                    y.append(0)
+      recs1 = blk_index1[blk]
+      recs2 = blk_index2[blk]
+      for r1 in recs1:
+        for r2 in recs2:
+          bf1 = bf_dict1[r1]
+          bf2 = bf_dict2[r2]
+          sim = self.bf.calc_bf_sim(bf1, bf2)
+          X.append([sim])
+          if rec_dict1[r1][self.ent_id] == rec_dict2[r2][self.ent_id]:
+            y.append(1)
+          else:
+            y.append(0)
 
     model = LogisticRegression(random_state=42, max_iter=1000)
     model.fit(X, y)
@@ -554,15 +552,18 @@ def match_lr(self, blk_index1, blk_index2, bf_dict1, bf_dict2, rec_dict1, rec_di
     index = 0
 
     for blk in common_blks:
-        recs1 = blk_index1[blk]
-        recs2 = blk_index2[blk]
-        for r1 in recs1:
-            for r2 in recs2:
-                prediction = model.predict([X[index]])[0]
-                if prediction == 1:
-                    matches.append([r1, r2])
-                index += 1
+      recs1 = blk_index1[blk]
+      recs2 = blk_index2[blk]
+      for r1 in recs1:
+        for r2 in recs2:
+          prediction = model.predict([X[index]])[0]
+          if prediction == 1:
+            matches.append([r1, r2])
+          index += 1
 
     print(MATCHING_PAIRS_MSG, len(matches))
     return matches
+  
+  
+  
   
