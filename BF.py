@@ -19,7 +19,6 @@ import os
 
 random.seed(9318)
 
-from bitarray import bitarray
 import matplotlib
 import matplotlib.pyplot as plt
 
@@ -61,41 +60,43 @@ class BF():
   # ---------------------------------------------------------------------------
 
   def set_to_bloom_filter(self, val_set):
-    """Convert an input set of values into a Bloom filter.
-    """
+    """Convert an input set of values into a Counting Bloom Filter."""
 
     k = self.bf_num_hash_func
     l = self.bf_len
 
-    bloom_set = bitarray(l)  # Convert set into a bit array		
-    bloom_set.setall(False)
-         
-    for val in val_set:
-      hex_str1 = self.h1(val.encode('utf-8')).hexdigest() #self.h1(val).hexdigest()
-      int1 =     int(hex_str1, 16)
-      hex_str2 = self.h2(val.encode('utf-8')).hexdigest() #self.h2(val).hexdigest()
-      int2 =     int(hex_str2, 16)
+    bloom_set = [0] * l
 
-      for i in range(k):
-        gi = int1 + i*int2
-        gi = int(gi % l)
-        bloom_set[gi] = True
-      
+    for val in val_set:
+        hex_str1 = self.h1(val.encode('utf-8')).hexdigest()
+        int1 = int(hex_str1, 16)
+
+        hex_str2 = self.h2(val.encode('utf-8')).hexdigest()
+        int2 = int(hex_str2, 16)
+
+        for i in range(k):
+            gi = int1 + i * int2
+            gi = int(gi % l)
+
+            bloom_set[gi] += 1
+
     return bloom_set
 
   # ---------------------------------------------------------------------------
 
   def calc_bf_sim(self, bf1, bf2):
-    """Calculate Dice coefficient similarity of two Bloom filters.
-    """
+    """Calculate Dice similarity for Counting Bloom Filters."""
 
-    bf1_1s = bf1.count()
-    bf2_1s = bf2.count()
+    bf1_sum = sum(bf1)
+    bf2_sum = sum(bf2)
 
-    common_1s = (bf1 & bf2).count()
+    common = 0
 
-    dice_sim = (2.0 * common_1s)/(bf1_1s + bf2_1s)
-      
+    for i in range(len(bf1)):
+      common += min(bf1[i], bf2[i])
+
+    dice_sim = (2.0 * common) / (bf1_sum + bf2_sum)
+
     return dice_sim
 
   # ---------------------------------------------------------------------------
