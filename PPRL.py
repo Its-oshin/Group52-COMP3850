@@ -15,7 +15,6 @@ import string
 import difflib
 import copy
 from BF import BF #import the BF module
-from bitarray import bitarray
 import hashlib
 import matplotlib.pyplot as plt
 from sklearn import svm
@@ -161,51 +160,68 @@ class Link:
 
   # ---------------------------------------------------------------------------
 
-  def data_encode(self,rec_dict):
-    """Encode records into Bloom filters.
+    def data_encode(self, rec_dict):
+    """Encode records into Counting Bloom Filters.
     """
+
     BF_dict = {}
-    
-    all_val_set = [] #contains all vals (e.g. q-grams) - required to calculate the false positive rate
-        
+
+    all_val_set = []
+
     for rec in rec_dict:
+
         this_rec_list = rec_dict[rec]
-        this_rec_bf = bitarray(self.length)
-        this_rec_bf.setall(False)
+
+        # Counting Bloom Filter starts as integer list
+        this_rec_bf = [0] * self.length
+
         for attr in self.use_attr_index:
-            this_attr_val_set = self.bf.convert_str_val_to_set(this_rec_list[attr])
+
+            this_attr_val_set = self.bf.convert_str_val_to_set(
+                this_rec_list[attr]
+            )
+
             all_val_set += this_attr_val_set
-            this_attr_bf = self.bf.set_to_bloom_filter(this_attr_val_set)
-            this_rec_bf |= this_attr_bf
+
+            this_attr_bf = self.bf.set_to_bloom_filter(
+                this_attr_val_set
+            )
+
+            # Add counts instead of OR operation
+            for i in range(self.length):
+                this_rec_bf[i] += this_attr_bf[i]
+
         BF_dict[rec] = this_rec_bf
-    
+
     return BF_dict, all_val_set
 
   # ---------------------------------------------------------------------------
 
-  def add_DP_noise(self,bf_dict):
-    """Encode records into Bloom filters.
-    """
-            
-    #print(bf_dict)
-    pbf_dict = copy.deepcopy(bf_dict) #copy the Bloom filter dictionary
-    
-    #perturb the copied Bloom filter dictionary to add noise
+  def add_DP_noise(self, bf_dict):
+    """Add differential privacy noise to Counting Bloom Filters."""
+
+    pbf_dict = copy.deepcopy(bf_dict)
+
     for bf in pbf_dict:
+
         this_bf = pbf_dict[bf]
-        prob_to_flip = 1.0/(1+math.e**(self.epsilon/2))
-        num_bits_to_flip = int(self.length * prob_to_flip)
+
+        prob_to_flip = 1.0 / (1 + math.e ** (self.epsilon / 2))
+
+        num_vals_to_change = int(self.length * prob_to_flip)
+
         indices = [x for x in range(self.length)]
-        indices_to_flip = random.sample(indices, num_bits_to_flip)
-        
-        for ind in indices_to_flip:
-            if this_bf[ind] == 0:
-                this_bf[ind] = 1
+
+        indices_to_change = random.sample(indices, num_vals_to_change)
+
+        for ind in indices_to_change:
+
+            if random.random() < 0.5:
+                this_bf[ind] += 1
             else:
-                this_bf[ind] = 0
-                
-    #print(bf_dict)
-        
+                if this_bf[ind] > 0:
+                    this_bf[ind] -= 1
+
     return pbf_dict    
 
   # ---------------------------------------------------------------------------
