@@ -160,9 +160,8 @@ class Link:
 
   # ---------------------------------------------------------------------------
 
-    def data_encode(self, rec_dict):
-    """Encode records into Counting Bloom Filters.
-    """
+  def data_encode(self, rec_dict):
+    """Encode records into Counting Bloom Filters."""
 
     BF_dict = {}
 
@@ -170,31 +169,28 @@ class Link:
 
     for rec in rec_dict:
 
-        this_rec_list = rec_dict[rec]
+      this_rec_list = rec_dict[rec]
 
-        # Counting Bloom Filter starts as integer list
-        this_rec_bf = [0] * self.length
+      this_rec_bf = [0] * self.length
 
-        for attr in self.use_attr_index:
+      for attr in self.use_attr_index:
 
-            this_attr_val_set = self.bf.convert_str_val_to_set(
-                this_rec_list[attr]
-            )
+        this_attr_val_set = self.bf.convert_str_val_to_set(
+          this_rec_list[attr]
+        )
 
-            all_val_set += this_attr_val_set
+        all_val_set += this_attr_val_set
 
-            this_attr_bf = self.bf.set_to_bloom_filter(
-                this_attr_val_set
-            )
+        this_attr_bf = self.bf.set_to_bloom_filter(
+          this_attr_val_set
+        )
 
-            # Add counts instead of OR operation
-            for i in range(self.length):
-                this_rec_bf[i] += this_attr_bf[i]
+        for i in range(self.length):
+          this_rec_bf[i] += this_attr_bf[i]
 
-        BF_dict[rec] = this_rec_bf
+      BF_dict[rec] = this_rec_bf
 
     return BF_dict, all_val_set
-
   # ---------------------------------------------------------------------------
 
   def add_DP_noise(self, bf_dict):
