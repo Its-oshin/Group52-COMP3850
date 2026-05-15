@@ -87,9 +87,10 @@ class BF():
     return bloom_set
 
   # ---------------------------------------------------------------------------
-    
-    def set_to_counting_bloom_filter(self, val_set):
-    """Convert an input set of values into a Counting Bloom Filter. """
+
+
+  def set_to_counting_bloom_filter(self, val_set):
+    """Convert an input set of values into a Counting Bloom Filter."""
 
     k = self.bf_num_hash_func
     l = self.bf_len
@@ -132,8 +133,8 @@ class BF():
     return dice_sim
 
   # ---------------------------------------------------------------------------
-    
-    def calc_cbf_sim(self, cbf1, cbf2):
+
+  def calc_cbf_sim(self, cbf1, cbf2):
     """Calculate count-based Dice similarity for Counting Bloom Filters."""
 
     cbf1_sum = sum(cbf1)
