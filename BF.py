@@ -18,7 +18,7 @@ import os
 
 
 random.seed(9318)
-
+from bitarray import bitarray
 import matplotlib
 import matplotlib.pyplot as plt
 
@@ -60,44 +60,114 @@ class BF():
   # ---------------------------------------------------------------------------
 
   def set_to_bloom_filter(self, val_set):
-    """Convert an input set of values into a Counting Bloom Filter."""
+    """Convert an input set of values into a standard binary Bloom filter.
+
+       This is the original encoding method. It returns a bitarray where each
+       position is either 0 or 1.
+    """
 
     k = self.bf_num_hash_func
     l = self.bf_len
 
-    bloom_set = [0] * l
+    bloom_set = bitarray(l)
+    bloom_set.setall(False)
 
     for val in val_set:
-        hex_str1 = self.h1(val.encode('utf-8')).hexdigest()
-        int1 = int(hex_str1, 16)
+      hex_str1 = self.h1(val.encode('utf-8')).hexdigest()
+      int1 = int(hex_str1, 16)
 
-        hex_str2 = self.h2(val.encode('utf-8')).hexdigest()
-        int2 = int(hex_str2, 16)
+      hex_str2 = self.h2(val.encode('utf-8')).hexdigest()
+      int2 = int(hex_str2, 16)
 
-        for i in range(k):
-            gi = int1 + i * int2
-            gi = int(gi % l)
-
-            bloom_set[gi] += 1
+      for i in range(k):
+        gi = int1 + i * int2
+        gi = int(gi % l)
+        bloom_set[gi] = True
 
     return bloom_set
 
   # ---------------------------------------------------------------------------
+    
+    def set_to_counting_bloom_filter(self, val_set):
+    """Convert an input set of values into a Counting Bloom Filter. """
+
+    k = self.bf_num_hash_func
+    l = self.bf_len
+
+    cbf_set = [0] * l
+
+    for val in val_set:
+      hex_str1 = self.h1(val.encode('utf-8')).hexdigest()
+      int1 = int(hex_str1, 16)
+
+      hex_str2 = self.h2(val.encode('utf-8')).hexdigest()
+      int2 = int(hex_str2, 16)
+
+      for i in range(k):
+        gi = int1 + i * int2
+        gi = int(gi % l)
+        cbf_set[gi] += 1
+
+    return cbf_set
+
+  # ---------------------------------------------------------------------------
 
   def calc_bf_sim(self, bf1, bf2):
-    """Calculate Dice similarity for Counting Bloom Filters."""
+    """Calculate Dice coefficient similarity.
+    """
 
-    bf1_sum = sum(bf1)
-    bf2_sum = sum(bf2)
+    if isinstance(bf1, list) or isinstance(bf2, list):
+      return self.calc_cbf_sim(bf1, bf2)
+
+    bf1_1s = bf1.count()
+    bf2_1s = bf2.count()
+
+    if (bf1_1s + bf2_1s) == 0:
+      return 0.0
+
+    common_1s = (bf1 & bf2).count()
+
+    dice_sim = (2.0 * common_1s) / (bf1_1s + bf2_1s)
+
+    return dice_sim
+
+  # ---------------------------------------------------------------------------
+    
+    def calc_cbf_sim(self, cbf1, cbf2):
+    """Calculate count-based Dice similarity for Counting Bloom Filters."""
+
+    cbf1_sum = sum(cbf1)
+    cbf2_sum = sum(cbf2)
+
+    if (cbf1_sum + cbf2_sum) == 0:
+      return 0.0
 
     common = 0
 
-    for i in range(len(bf1)):
-      common += min(bf1[i], bf2[i])
+    for i in range(len(cbf1)):
+      common += min(cbf1[i], cbf2[i])
 
-    dice_sim = (2.0 * common) / (bf1_sum + bf2_sum)
+    dice_sim = (2.0 * common) / (cbf1_sum + cbf2_sum)
 
     return dice_sim
+
+  def calc_abs_diff(self, val1, val2):
+    
+    max_abs_diff = self.max_abs_diff
+
+    if (val1 == val2):
+      return 1.0
+
+    abs_val_diff = abs(float(val1) - float(val2))
+
+    if (abs_val_diff >= max_abs_diff):
+      return 0.0  # Outside allowed maximum difference
+
+    abs_sim = 1.0 - abs_val_diff / max_abs_diff
+
+    assert abs_sim > 0.0 and abs_sim < 1.0, (val1, val2, abs_sim)
+
+    return abs_sim
 
   # ---------------------------------------------------------------------------
 
