@@ -152,24 +152,6 @@ class BF():
 
     return dice_sim
 
-  def calc_abs_diff(self, val1, val2):
-    
-    max_abs_diff = self.max_abs_diff
-
-    if (val1 == val2):
-      return 1.0
-
-    abs_val_diff = abs(float(val1) - float(val2))
-
-    if (abs_val_diff >= max_abs_diff):
-      return 0.0  # Outside allowed maximum difference
-
-    abs_sim = 1.0 - abs_val_diff / max_abs_diff
-
-    assert abs_sim > 0.0 and abs_sim < 1.0, (val1, val2, abs_sim)
-
-    return abs_sim
-
   # ---------------------------------------------------------------------------
 
   def calc_abs_diff(self, val1, val2):
