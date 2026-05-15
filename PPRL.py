@@ -209,7 +209,7 @@ class Link:
 
   # ---------------------------------------------------------------------------
     
-    def data_encode_cbf(self, rec_dict):
+  def data_encode_cbf(self, rec_dict):
     """Convenience wrapper to encode records into Counting Bloom Filters."""
 
     return self.data_encode(rec_dict, encoding='cbf')
@@ -274,33 +274,7 @@ class Link:
           if this_cbf[ind] > 0:
             this_cbf[ind] -= 1
 
-    return pcbf_dict
-
-
-  def match(self, blk_index1, blk_index2, bf_dict1, bf_dict2):
-    """Match and link records based on the similarity between their Bloom filter encodings.
-    """
-    matches = []
-    common_blks = []
-    
-    for blk in blk_index1:
-        if blk in blk_index2:
-            common_blks.append(blk)
-    print('number of common blocks:', len(common_blks))
-    
-    for blk in common_blks:
-        recs_list1 = blk_index1[blk]
-        recs_list2 = blk_index2[blk]
-        for rec1 in recs_list1:
-            for rec2 in recs_list2:
-                bf1 = bf_dict1[rec1]
-                bf2 = bf_dict2[rec2]
-                sim = self.bf.calc_bf_sim(bf1,bf2)
-                if sim >= self.min_sim_val:
-                    matches.append([rec1,rec2])
-    print('Number of matching pairs:', len(matches))
-    #print(matches)
-    return matches    
+    return pcbf_dict    
 
   # ---------------------------------------------------------------------------
 
