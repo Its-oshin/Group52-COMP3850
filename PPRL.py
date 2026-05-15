@@ -15,6 +15,7 @@ import string
 import difflib
 import copy
 from BF import BF #import the BF module
+from bitarray import bitarray
 import hashlib
 import matplotlib.pyplot as plt
 from sklearn import svm
@@ -160,65 +161,146 @@ class Link:
 
   # ---------------------------------------------------------------------------
 
-  def data_encode(self, rec_dict):
-    """Encode records into Counting Bloom Filters."""
+  def data_encode(self, rec_dict, encoding='bf'):
+    """Encode records into Bloom filters.
+
+       Arguments:
+       - rec_dict: Dictionary of records to encode.
+       - encoding: 'bf' for standard binary Bloom Filter or 'cbf' for Counting
+                   Bloom Filter.
+
+       This keeps the original BF method and adds CBF as a selectable option.
+    """
 
     BF_dict = {}
 
     all_val_set = []
 
-    for rec in rec_dict:
+    encoding = encoding.lower()
 
+    if encoding not in ['bf', 'cbf']:
+      raise ValueError("encoding must be either 'bf' or 'cbf'")
+
+    for rec in rec_dict:
       this_rec_list = rec_dict[rec]
 
-      this_rec_bf = [0] * self.length
+      if encoding == 'bf':
+        this_rec_bf = bitarray(self.length)
+        this_rec_bf.setall(False)
+      else:
+        this_rec_bf = [0] * self.length
 
       for attr in self.use_attr_index:
-
-        this_attr_val_set = self.bf.convert_str_val_to_set(
-          this_rec_list[attr]
-        )
-
+        this_attr_val_set = self.bf.convert_str_val_to_set(this_rec_list[attr])
         all_val_set += this_attr_val_set
 
-        this_attr_bf = self.bf.set_to_bloom_filter(
-          this_attr_val_set
-        )
+        if encoding == 'bf':
+          this_attr_bf = self.bf.set_to_bloom_filter(this_attr_val_set)
+          this_rec_bf |= this_attr_bf
+        else:
+          this_attr_bf = self.bf.set_to_counting_bloom_filter(this_attr_val_set)
 
-        for i in range(self.length):
-          this_rec_bf[i] += this_attr_bf[i]
+          for i in range(self.length):
+            this_rec_bf[i] += this_attr_bf[i]
 
       BF_dict[rec] = this_rec_bf
 
     return BF_dict, all_val_set
+
   # ---------------------------------------------------------------------------
+    
+    def data_encode_cbf(self, rec_dict):
+    """Convenience wrapper to encode records into Counting Bloom Filters."""
+
+    return self.data_encode(rec_dict, encoding='cbf')
+
 
   def add_DP_noise(self, bf_dict):
-    """Add differential privacy noise to Counting Bloom Filters."""
+    """Add differential privacy noise.
+
+       This function keeps the original binary bit-flipping behaviour for
+       standard Bloom Filters and automatically switches to count perturbation
+       for Counting Bloom Filters.
+    """
+
+    # Return empty dictionary safely
+    if not bf_dict:
+      return {}
+
+    first_key = next(iter(bf_dict))
+    first_bf = bf_dict[first_key]
+
+    if isinstance(first_bf, list):
+      return self.add_DP_noise_cbf(bf_dict)
 
     pbf_dict = copy.deepcopy(bf_dict)
 
     for bf in pbf_dict:
+      this_bf = pbf_dict[bf]
+      prob_to_flip = 1.0 / (1 + math.e ** (self.epsilon / 2))
+      num_bits_to_flip = int(self.length * prob_to_flip)
+      indices = [x for x in range(self.length)]
+      indices_to_flip = random.sample(indices, num_bits_to_flip)
 
-        this_bf = pbf_dict[bf]
+      for ind in indices_to_flip:
+        if this_bf[ind] == 0:
+          this_bf[ind] = 1
+        else:
+          this_bf[ind] = 0
 
-        prob_to_flip = 1.0 / (1 + math.e ** (self.epsilon / 2))
+    return pbf_dict
+  # ---------------------------------------------------------------------------
 
-        num_vals_to_change = int(self.length * prob_to_flip)
+  def add_DP_noise_cbf(self, cbf_dict):
+    """Add simple count-based differential privacy noise to Counting Bloom Filters.
 
-        indices = [x for x in range(self.length)]
+       Counts are perturbed up or down while staying non-negative. This is used
+       only when the encoded records are CBF lists rather than binary bitarrays.
+    """
 
-        indices_to_change = random.sample(indices, num_vals_to_change)
+    pcbf_dict = copy.deepcopy(cbf_dict)
 
-        for ind in indices_to_change:
+    for bf in pcbf_dict:
+      this_cbf = pcbf_dict[bf]
+      prob_to_change = 1.0 / (1 + math.e ** (self.epsilon / 2))
+      num_vals_to_change = int(self.length * prob_to_change)
+      indices = [x for x in range(self.length)]
+      indices_to_change = random.sample(indices, num_vals_to_change)
 
-            if random.random() < 0.5:
-                this_bf[ind] += 1
-            else:
-                if this_bf[ind] > 0:
-                    this_bf[ind] -= 1
+      for ind in indices_to_change:
+        if random.random() < 0.5:
+          this_cbf[ind] += 1
+        else:
+          if this_cbf[ind] > 0:
+            this_cbf[ind] -= 1
 
-    return pbf_dict    
+    return pcbf_dict
+
+
+  def match(self, blk_index1, blk_index2, bf_dict1, bf_dict2):
+    """Match and link records based on the similarity between their Bloom filter encodings.
+    """
+    matches = []
+    common_blks = []
+    
+    for blk in blk_index1:
+        if blk in blk_index2:
+            common_blks.append(blk)
+    print('number of common blocks:', len(common_blks))
+    
+    for blk in common_blks:
+        recs_list1 = blk_index1[blk]
+        recs_list2 = blk_index2[blk]
+        for rec1 in recs_list1:
+            for rec2 in recs_list2:
+                bf1 = bf_dict1[rec1]
+                bf2 = bf_dict2[rec2]
+                sim = self.bf.calc_bf_sim(bf1,bf2)
+                if sim >= self.min_sim_val:
+                    matches.append([rec1,rec2])
+    print('Number of matching pairs:', len(matches))
+    #print(matches)
+    return matches    
 
   # ---------------------------------------------------------------------------
 
