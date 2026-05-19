@@ -8,7 +8,7 @@
 # -----------------------------------------------------------------------------
 
 # Imports
-
+#
 import math
 import random
 import gzip
@@ -20,11 +20,14 @@ from bitarray import bitarray
 import hashlib
 import matplotlib.pyplot as plt
 from sklearn import svm
+from sklearn.linear_model import LogisticRegression
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.neighbors import KNeighborsClassifier
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import precision_score, recall_score, f1_score
+import numpy as np
 
 
-
-COMMON_BLOCKS_MSG = 'number of common blocks:'
-MATCHING_PAIRS_MSG = 'Number of matching pairs:'
 
 
 # -----------------------------------------------------------------------------
@@ -159,52 +162,120 @@ class Link:
 
   # ---------------------------------------------------------------------------
 
-  def data_encode(self,rec_dict):
+  def data_encode(self, rec_dict, encoding='bf'):
     """Encode records into Bloom filters.
+
+       Arguments:
+       - rec_dict: Dictionary of records to encode.
+       - encoding: 'bf' for standard binary Bloom Filter or 'cbf' for Counting
+                   Bloom Filter.
+
+       This keeps the original BF method and adds CBF as a selectable option.
     """
+
     BF_dict = {}
-    
-    all_val_set = [] #contains all vals (e.g. q-grams) - required to calculate the false positive rate
-        
+
+    all_val_set = []
+
+    encoding = encoding.lower()
+
+    if encoding not in ['bf', 'cbf']:
+      raise ValueError("encoding must be either 'bf' or 'cbf'")
+
     for rec in rec_dict:
-        this_rec_list = rec_dict[rec]
+      this_rec_list = rec_dict[rec]
+
+      if encoding == 'bf':
         this_rec_bf = bitarray(self.length)
         this_rec_bf.setall(False)
-        for attr in self.use_attr_index:
-            this_attr_val_set = self.bf.convert_str_val_to_set(this_rec_list[attr])
-            all_val_set += this_attr_val_set
-            this_attr_bf = self.bf.set_to_bloom_filter(this_attr_val_set)
-            this_rec_bf |= this_attr_bf
-        BF_dict[rec] = this_rec_bf
-    
+      else:
+        this_rec_bf = [0] * self.length
+
+      for attr in self.use_attr_index:
+        this_attr_val_set = self.bf.convert_str_val_to_set(this_rec_list[attr])
+        all_val_set += this_attr_val_set
+
+        if encoding == 'bf':
+          this_attr_bf = self.bf.set_to_bloom_filter(this_attr_val_set)
+          this_rec_bf |= this_attr_bf
+        else:
+          this_attr_bf = self.bf.set_to_counting_bloom_filter(this_attr_val_set)
+
+          for i in range(self.length):
+            this_rec_bf[i] += this_attr_bf[i]
+
+      BF_dict[rec] = this_rec_bf
+
     return BF_dict, all_val_set
 
   # ---------------------------------------------------------------------------
-
-  def add_DP_noise(self,bf_dict):
-    """Encode records into Bloom filters.
-    """
-            
-    #print(bf_dict)
-    pbf_dict = copy.deepcopy(bf_dict) #copy the Bloom filter dictionary
     
-    #perturb the copied Bloom filter dictionary to add noise
+  def data_encode_cbf(self, rec_dict):
+    """Convenience wrapper to encode records into Counting Bloom Filters."""
+
+    return self.data_encode(rec_dict, encoding='cbf')
+
+
+  def add_DP_noise(self, bf_dict):
+    """Add differential privacy noise.
+
+       This function keeps the original binary bit-flipping behaviour for
+       standard Bloom Filters and automatically switches to count perturbation
+       for Counting Bloom Filters.
+    """
+
+    # Return empty dictionary safely
+    if not bf_dict:
+      return {}
+
+    first_key = next(iter(bf_dict))
+    first_bf = bf_dict[first_key]
+
+    if isinstance(first_bf, list):
+      return self.add_DP_noise_cbf(bf_dict)
+
+    pbf_dict = copy.deepcopy(bf_dict)
+
     for bf in pbf_dict:
-        this_bf = pbf_dict[bf]
-        prob_to_flip = 1.0/(1+math.e**(self.epsilon/2))
-        num_bits_to_flip = int(self.length * prob_to_flip)
-        indices = [x for x in range(self.length)]
-        indices_to_flip = random.sample(indices, num_bits_to_flip)
-        
-        for ind in indices_to_flip:
-            if this_bf[ind] == 0:
-                this_bf[ind] = 1
-            else:
-                this_bf[ind] = 0
-                
-    #print(bf_dict)
-        
-    return pbf_dict    
+      this_bf = pbf_dict[bf]
+      prob_to_flip = 1.0 / (1 + math.e ** (self.epsilon / 2))
+      num_bits_to_flip = int(self.length * prob_to_flip)
+      indices = [x for x in range(self.length)]
+      indices_to_flip = random.sample(indices, num_bits_to_flip)
+
+      for ind in indices_to_flip:
+        if this_bf[ind] == 0:
+          this_bf[ind] = 1
+        else:
+          this_bf[ind] = 0
+
+    return pbf_dict
+  # ---------------------------------------------------------------------------
+
+  def add_DP_noise_cbf(self, cbf_dict):
+    """Add simple count-based differential privacy noise to Counting Bloom Filters.
+
+       Counts are perturbed up or down while staying non-negative. This is used
+       only when the encoded records are CBF lists rather than binary bitarrays.
+    """
+
+    pcbf_dict = copy.deepcopy(cbf_dict)
+
+    for bf in pcbf_dict:
+      this_cbf = pcbf_dict[bf]
+      prob_to_change = 1.0 / (1 + math.e ** (self.epsilon / 2))
+      num_vals_to_change = int(self.length * prob_to_change)
+      indices = [x for x in range(self.length)]
+      indices_to_change = random.sample(indices, num_vals_to_change)
+
+      for ind in indices_to_change:
+        if random.random() < 0.5:
+          this_cbf[ind] += 1
+        else:
+          if this_cbf[ind] > 0:
+            this_cbf[ind] -= 1
+
+    return pcbf_dict    
 
   # ---------------------------------------------------------------------------
 
@@ -217,7 +288,7 @@ class Link:
     for blk in blk_index1:
         if blk in blk_index2:
             common_blks.append(blk)
-    print(COMMON_BLOCKS_MSG, len(common_blks))
+    print('number of common blocks:', len(common_blks))
     
     for blk in common_blks:
         recs_list1 = blk_index1[blk]
@@ -229,7 +300,7 @@ class Link:
                 sim = self.bf.calc_bf_sim(bf1,bf2)
                 if sim >= self.min_sim_val:
                     matches.append([rec1,rec2])
-    print(MATCHING_PAIRS_MSG, len(matches))
+    print('Number of matching pairs:', len(matches))
     #print(matches)
     return matches
 
@@ -244,7 +315,7 @@ class Link:
     for blk in blk_index1:
         if blk in blk_index2:
             common_blks.append(blk)
-    print(COMMON_BLOCKS_MSG, len(common_blks))
+    print('number of common blocks:', len(common_blks))
     
     for blk in common_blks:
         recs_list1 = blk_index1[blk]
@@ -257,7 +328,7 @@ class Link:
                     tot_sim += self.string_similarity(rec_dict1[rec1][attr],rec_dict2[rec2][attr])
                 if tot_sim/len(self.use_attr_index) >= self.min_sim_val:
                     matches.append([rec1,rec2])
-    print(MATCHING_PAIRS_MSG, len(matches))
+    print('Number of matching pairs:', len(matches))
     #print(matches)
     return matches
 
@@ -356,123 +427,102 @@ class Link:
     plt.ylim(ymin=0.0)
     plt.legend(loc='best')
     plt.show()
-    
-##########################################################
+  
+  # ---------------------------------------------------------------------------
+
+  # Logistic Regression - Trong
+   
+  def match_lr(self, blk_index1, blk_index2, bf_dict1, bf_dict2, rec_dict1, rec_dict2):
+    """Match and link records using Logistic Regression over Bloom filter similarities."""
 
 
+    X = []
+    y = []
 
-#
-# KNN based record linkage using Bloom filter similarities.
-#
-
-# ---------------------------------------------------------------------------
-# build candidate pairs from shared blocks
-  def _build_candidate_pairs(self, blk_index1, blk_index2):
-    """Build candidate record pairs from shared blocks."""
-    common_blks = []
-    candidate_pairs = []
-
-    for blk in blk_index1:
-      if blk in blk_index2:
-        common_blks.append(blk)
+    common_blks = [blk for blk in blk_index1 if blk in blk_index2]
+    print('Number of common blocks:', len(common_blks))
 
     for blk in common_blks:
-      recs_list1 = blk_index1[blk]
-      recs_list2 = blk_index2[blk]
-      for rec1 in recs_list1:
-        for rec2 in recs_list2:
-          candidate_pairs.append([rec1, rec2])
+      recs1 = blk_index1[blk]
+      recs2 = blk_index2[blk]
+      for r1 in recs1:
+        for r2 in recs2:
+          bf1 = bf_dict1[r1]
+          bf2 = bf_dict2[r2]
+          sim = self.bf.calc_bf_sim(bf1, bf2)
+          X.append([sim])
+          if rec_dict1[r1][self.ent_id] == rec_dict2[r2][self.ent_id]:
+            y.append(1)
+          else:
+            y.append(0)
 
-    return common_blks, candidate_pairs
+    model = LogisticRegression(random_state=42, max_iter=1000)
+    model.fit(X, y)
 
-  # ---------------------------------------------------------------------------
-  # balance positive and negative examples for KNN training
-  def _balance_training_examples(self, pos_examples, neg_examples, balance):
-    """Optionally rebalance positive and negative training examples."""
-    if balance != True or len(pos_examples) == 0 or len(neg_examples) == 0:
-      return pos_examples, neg_examples
-
-    if len(neg_examples) > len(pos_examples):
-      neg_examples = random.sample(neg_examples, len(pos_examples))
-    elif len(pos_examples) > len(neg_examples):
-      pos_examples = random.sample(pos_examples, len(neg_examples))
-
-    return pos_examples, neg_examples
-
-  # ---------------------------------------------------------------------------
-  # build KNN training set from candidate pairs and bloom filter similarities
-  def _build_knn_training(self, candidate_pairs, rec_dict1, rec_dict2, bf_dict1,
-                          bf_dict2, sample_limit=None, balance=True):
-    """Build a 1D KNN training set using Bloom filter similarities."""
-    pos = []
-    neg = []
-
-    for rec1, rec2 in candidate_pairs:
-      bf1 = bf_dict1[rec1]
-      bf2 = bf_dict2[rec2]
-      sim = self.bf.calc_bf_sim(bf1, bf2)
-      label = 1 if rec_dict1[rec1][self.ent_id] == rec_dict2[rec2][self.ent_id] else 0
-
-      if label == 1:
-        pos.append((sim, label))
-      else:
-        neg.append((sim, label))
-
-    if len(pos) == 0 and len(neg) == 0:
-      raise ValueError('No candidate pairs found for training')
-
-    pos, neg = self._balance_training_examples(pos, neg, balance)
-
-    sampled = pos + neg
-    random.shuffle(sampled)
-
-    if sample_limit is not None and sample_limit < len(sampled):
-      sampled = sampled[:sample_limit]
-
-    if len(sampled) == 0:
-      raise ValueError('Training set is empty after sampling')
-
-    train_sims = [sim for sim, _label in sampled]
-    train_labels = [label for _sim, label in sampled]
-    return train_sims, train_labels
-
-  # ---------------------------------------------------------------------------
-  # KNN based matching using bloom filter similarities and trained KNN model
-  def match_knn(self, blk_index1, blk_index2, bf_dict1, bf_dict2, rec_dict1,
-                rec_dict2, k=3, sample_limit=None, balance=True):
-    """Match records using KNN over Bloom filter similarity scores."""
-    common_blks, candidate_pairs = self._build_candidate_pairs(blk_index1, blk_index2)
-    print(COMMON_BLOCKS_MSG, len(common_blks))
-
-    train_sims, train_labels = self._build_knn_training(candidate_pairs, rec_dict1,
-                                                        rec_dict2, bf_dict1,
-                                                        bf_dict2, sample_limit,
-                                                        balance)
-
-    k = max(1, min(int(k), len(train_sims)))
     matches = []
+    index = 0
 
-    for rec1, rec2 in candidate_pairs:
-      bf1 = bf_dict1[rec1]
-      bf2 = bf_dict2[rec2]
-      sim = self.bf.calc_bf_sim(bf1, bf2)
+    for blk in common_blks:
+      recs1 = blk_index1[blk]
+      recs2 = blk_index2[blk]
+      for r1 in recs1:
+        for r2 in recs2:
+          prediction = model.predict([X[index]])[0]
+          if prediction == 1:
+            matches.append([r1, r2])
+          index += 1
 
-      dists = [(abs(sim - train_sim), idx) for idx, train_sim in enumerate(train_sims)]
-      dists.sort(key=lambda item: item[0])
-      votes = [train_labels[idx] for (_dist, idx) in dists[:k]]
-      pred = 1 if sum(votes) >= (len(votes) / 2.0) else 0
-
-      if pred == 1:
-        matches.append([rec1, rec2])
-
-    print(MATCHING_PAIRS_MSG, len(matches))
+    print('Number of matching pairs:', len(matches))
     return matches
 
   # ---------------------------------------------------------------------------
-  # train SVM model for matching  
-  def match_svm(self, blk_index1, blk_index2, bf_dict1, bf_dict2, rec_dict1, rec_dict2):
+  
+  # Random Forest Linkage - Liza
+  def match_rf(self, blk_index1, blk_index2, bf_dict1, bf_dict2, rec_dict1, rec_dict2):
+    """Match and link records using Random Forest classifier."""
 
-    from sklearn import svm
+
+    pair_features = []
+    pair_labels = []
+
+    for blk in blk_index1:
+        if blk in blk_index2:
+            for rec1 in blk_index1[blk]:
+                for rec2 in blk_index2[blk]:
+                    bf1 = bf_dict1[rec1]
+                    bf2 = bf_dict2[rec2]
+                    sim = self.bf.calc_bf_sim(bf1, bf2)
+                    pair_features.append([sim])
+                    if rec_dict1[rec1][0] == rec_dict2[rec2][0]:
+                        pair_labels.append(1)
+                    else:
+                        pair_labels.append(0)
+
+    X = np.array(pair_features)
+    y = np.array(pair_labels)
+
+    X_train, X_test, y_train, y_test = train_test_split(
+        X, y, test_size=0.3, random_state=42)
+
+    rf_model = RandomForestClassifier(n_estimators=100, random_state=42)
+    rf_model.fit(X_train, y_train)
+
+    y_pred = rf_model.predict(X_test)
+
+    rf_precision = precision_score(y_test, y_pred, zero_division=0)
+    rf_recall = recall_score(y_test, y_pred, zero_division=0)
+    rf_f1 = f1_score(y_test, y_pred, zero_division=0)
+
+    matches = []
+    for i, pred in enumerate(y_pred):
+        if pred == 1:
+            matches.append(i)
+
+    return matches, rf_precision, rf_recall, rf_f1
+  
+ # ---------------------------------------------------------------------------
+  #SVM Linkage - Jeslin 
+  def match_svm(self, blk_index1, blk_index2, bf_dict1, bf_dict2, rec_dict1, rec_dict2):
 
     X = []
     y = []
@@ -521,6 +571,62 @@ class Link:
     print('Number of matching pairs (SVM):', len(matches))
 
     return matches
-  
+# ---------------------------------------------------------------------------
+  # KNN - Xai
+  def _collect_similarity_training_data(self, blk_index1, blk_index2, bf_dict1, bf_dict2, rec_dict1, rec_dict2):
+    """Build pairwise similarity features, labels, and record ids for supervised linkage models."""
 
+    common_blks = [blk for blk in blk_index1 if blk in blk_index2]
+    pair_features = []
+    pair_labels = []
+    pair_ids = []
+
+    for blk in common_blks:
+      recs1 = blk_index1[blk]
+      recs2 = blk_index2[blk]
+
+      for rec1 in recs1:
+        for rec2 in recs2:
+          bf1 = bf_dict1[rec1]
+          bf2 = bf_dict2[rec2]
+          sim = self.bf.calc_bf_sim(bf1, bf2)
+
+          pair_features.append([sim])
+          pair_ids.append([rec1, rec2])
+          pair_labels.append(int(rec_dict1[rec1][self.ent_id] == rec_dict2[rec2][self.ent_id]))
+
+    return common_blks, pair_features, pair_labels, pair_ids
   
+# ---------------------------------------------------------------------------
+  # KNN - Xai
+  def knn(self, blk_index1, blk_index2, bf_dict1, bf_dict2, rec_dict1, rec_dict2, k=3):
+    """Match and link records using a KNN classifier over Bloom filter similarities."""
+
+    if k < 1:
+      raise ValueError('k must be at least 1')
+
+    common_blks, pair_features, pair_labels, pair_ids = self._collect_similarity_training_data(
+      blk_index1,
+      blk_index2,
+      bf_dict1,
+      bf_dict2,
+      rec_dict1,
+      rec_dict2,
+    )
+    print('Number of common blocks:', len(common_blks))
+
+    if not pair_features:
+      print('Number of matching pairs (KNN): 0')
+      return []
+
+    knn_model = KNeighborsClassifier(n_neighbors=min(k, len(pair_features)))
+    knn_model.fit(pair_features, pair_labels)
+
+    predictions = knn_model.predict(pair_features)
+    matches = [pair_id for pair_id, prediction in zip(pair_ids, predictions) if prediction == 1]
+
+    print('Number of matching pairs (KNN):', len(matches))
+    return matches
+  
+ # ---------------------------------------------------------------------------    
+ 
