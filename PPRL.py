@@ -526,8 +526,10 @@ class Link:
 
     X = []
     y = []
+    pair_ids = []
 
     common_blks = [blk for blk in blk_index1 if blk in blk_index2]
+    print('Number of common blocks:', len(common_blks))
 
     for blk in common_blks:
         recs1 = blk_index1[blk]
@@ -542,35 +544,42 @@ class Link:
                 sim = self.bf.calc_bf_sim(bf1, bf2)
 
                 X.append([sim])
+                pair_ids.append([r1, r2])
 
                 if rec_dict1[r1][self.ent_id] == rec_dict2[r2][self.ent_id]:
                     y.append(1)
                 else:
                     y.append(0)
 
-    model = svm.SVC(kernel='linear')
-    model.fit(X, y)
+    X = np.array(X)
+    y = np.array(y)
+    pair_ids = np.array(pair_ids)
 
+    # 70/30 train/test split — matches the team's RF implementation
+    X_train, X_test, y_train, y_test, ids_train, ids_test = train_test_split(
+        X, y, pair_ids, test_size=0.3, random_state=42)
+
+    # Train SVM on training portion only
+    svm_model = svm.SVC(kernel='linear')
+    svm_model.fit(X_train, y_train)
+
+    # Predict on the held-out test portion
+    y_pred = svm_model.predict(X_test)
+
+    # Evaluate on the test split
+    svm_precision = precision_score(y_test, y_pred, zero_division=0)
+    svm_recall = recall_score(y_test, y_pred, zero_division=0)
+    svm_f1 = f1_score(y_test, y_pred, zero_division=0)
+
+    # Build matches list using actual record IDs from the test set
     matches = []
-    index = 0
-
-    for blk in common_blks:
-        recs1 = blk_index1[blk]
-        recs2 = blk_index2[blk]
-
-        for r1 in recs1:
-            for r2 in recs2:
-
-                prediction = model.predict([X[index]])[0]
-
-                if prediction == 1:
-                    matches.append([r1, r2])
-
-                index += 1
+    for i, pred in enumerate(y_pred):
+        if pred == 1:
+            matches.append([ids_test[i][0], ids_test[i][1]])
 
     print('Number of matching pairs (SVM):', len(matches))
 
-    return matches
+    return matches, svm_precision, svm_recall, svm_f1
 # ---------------------------------------------------------------------------
   # KNN - Xai
   def _collect_similarity_training_data(self, blk_index1, blk_index2, bf_dict1, bf_dict2, rec_dict1, rec_dict2):
