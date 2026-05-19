@@ -1,4 +1,5 @@
-# PPRL - Privacy-preserving record linkage algorithm 
+# PPRL - Privacy-preserving record lin
+# age algorithm 
 # using Bloom filter encoding with differential privacy
 # phonetic blocking, and threshold-based classification. 
 # Baseline methods - non-PPRL and PPRL without differential privacy
