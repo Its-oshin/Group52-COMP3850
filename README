@@ -1,0 +1,43 @@
+# Privacy-Preserving Record Linkage (PPRL) — COMP3850 Group 52
+
+Industry capstone for Dinusha Vatsalan & Piyumi Seneviratne, Macquarie University.
+Comparison of five record-linkage models under Bloom-filter encoding and differential privacy.
+
+## Overview
+Encodes quasi-identifiers into Bloom filters / Counting Bloom Filters (q-grams), applies
+bit-level differential privacy (bit-flipping) at epsilon ∈ {2, 3, 4}, blocks records, and
+classifies pairs as match / non-match using five models: threshold baseline, Logistic
+Regression, Random Forest, SVM and KNN. Evaluated with F1, precision and recall.
+
+## Repository structure
+- `PPRL.ipynb` — main pipeline (encoding, DP, blocking, models, evaluation)
+- `BF.py`, `PPRL.py` — encoding / linkage modules        [adjust to your actual files]
+- `report/Group52_Final_Report.pdf` — final report (key takeaways + analysis)
+- `requirements.txt` — dependencies
+- `README.md`
+
+## Requirements
+- Python 3.8+
+- scikit-learn, numpy, pandas, bitarray  [+ anything else you import]
+- `pip install -r requirements.txt`
+
+## How to run
+1. [any setup step]
+2. Open `PPRL.ipynb` in Jupyter and Run All  (or `python PPRL.py`).
+3. Results (F1 / precision / recall per model × epsilon × blocking config) output to [location].
+
+## Reproducing the dataset split   ← Piyumi's requirement #3
+The dataset is NOT included. To reproduce our split:
+- Dataset: Alice & Bob synthetic datasets provided by the sponsor.
+- Variant used: [e.g. 500-record file, corruption level X — which of the 12 files]
+- Train/test split: [e.g. 70/30], random_state = [seed]
+- Blocking keys tested: [2], [4], [2,4]
+- Epsilon values: 2, 3, 4
+
+## Key results
+- ML models (especially SVM and Random Forest) were more resilient to DP noise and data
+  corruption than the threshold baseline.
+- Best model: SVM (~0.97 F1). Recommended epsilon 3–4 and Counting Bloom Filter encoding.
+
+## Team
+Group 52 — Rajan, Nguyen, Cotten, Friend, Das, Persad
