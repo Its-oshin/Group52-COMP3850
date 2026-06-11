@@ -26,14 +26,23 @@ Regression, Random Forest, SVM and KNN. Evaluated with F1, precision and recall.
 2. Open `PPRL.ipynb` in Jupyter and Run All  (or `python PPRL.py`).
 3. Results (F1 / precision / recall per model × epsilon × blocking config) output to [location].
 
-## Reproducing the dataset split   ← Piyumi's requirement #3
-The dataset is NOT included. To reproduce our split:
-- Dataset: Alice & Bob synthetic datasets provided by the sponsor.
-- Variant used: [e.g. 500-record file, corruption level X — which of the 12 files]
-- Train/test split: [e.g. 70/30], random_state = [seed]
-- Blocking keys tested: [2], [4], [2,4]
-- Epsilon values: 2, 3, 4
+## Reproducing our results
 
+The Alice and Bob datasets are not included in this repo (provided by the sponsor).
+To reproduce our experiments:
+
+1. Place the sponsor-provided Alice and Bob files in `/data`.
+2. Open `PPRL.ipynb`. Each experiment was run manually: set the epsilon value (2, 3 or 4)
+   and select the Alice/Bob file near the top of the notebook, then Run All.
+3. Blocking configurations tested: [2], [4] and [2,4].
+4. The pipeline encodes the quasi-identifiers into Bloom filters (and Counting Bloom
+   Filters), applies differential privacy by bit-flipping at the chosen epsilon, blocks
+   records, then classifies each record pair as match / non-match using the five models
+   (threshold baseline, Logistic Regression, Random Forest, SVM, KNN).
+5. F1, precision and recall are recorded per model for each dataset × epsilon × blocking
+   combination, and compiled into our results sheet and final report.
+6. Each configuration was run once per setting. [If your notebook splits train/test for the
+   ML models with a random_state, add it here so results match exactly.]
 ## Key results
 - ML models (especially SVM and Random Forest) were more resilient to DP noise and data
   corruption than the threshold baseline.
