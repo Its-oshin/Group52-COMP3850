@@ -10,27 +10,25 @@ classifies pairs as match / non-match using five models: threshold baseline, Log
 Regression, Random Forest, SVM and KNN. Evaluated with F1, precision and recall.
 
 ## Repository structure
-- `PPRL.ipynb` — main pipeline (encoding, DP, blocking, models, evaluation)
-- `BF.py`, `PPRL.py` — encoding / linkage modules        [adjust to your actual files]
-- `report/Group52_Final_Report.pdf` — final report (key takeaways + analysis)
+- `PPRL.ipynb` — main pipeline: encoding, differential privacy, blocking, models, evaluation
+- `report/` — final report (key takeaways + analysis)
 - `requirements.txt` — dependencies
 - `README.md`
 
 ## Requirements
 - Python 3.8+
-- scikit-learn, numpy, pandas, bitarray  [+ anything else you import]
-- `pip install -r requirements.txt`
+- scikit-learn, numpy, pandas, bitarray (plus any others the notebook imports)
+- Install with: `pip install -r requirements.txt`
 
 ## How to run
-1. [any setup step]
-2. Open `PPRL.ipynb` in Jupyter and Run All  (or `python PPRL.py`).
-3. Results (F1 / precision / recall per model × epsilon × blocking config) output to [location].
+1. Install dependencies (above).
+2. Place the sponsor-provided Alice and Bob files in `/data` (see Reproducing our results).
+3. Open `PPRL.ipynb` in Jupyter and Run All.
+4. Per-model F1, precision and recall print in the notebook output for each configuration.
 
 ## Reproducing our results
-
 The Alice and Bob datasets are not included in this repo (provided by the sponsor).
 To reproduce our experiments:
-
 1. Place the sponsor-provided Alice and Bob files in `/data`.
 2. Open `PPRL.ipynb`. Each experiment was run manually: set the epsilon value (2, 3 or 4)
    and select the Alice/Bob file near the top of the notebook, then Run All.
@@ -41,8 +39,8 @@ To reproduce our experiments:
    (threshold baseline, Logistic Regression, Random Forest, SVM, KNN).
 5. F1, precision and recall are recorded per model for each dataset × epsilon × blocking
    combination, and compiled into our results sheet and final report.
-6. Each configuration was run once per setting. [If your notebook splits train/test for the
-   ML models with a random_state, add it here so results match exactly.]
+6. Each configuration was run once per setting.
+
 ## Key results
 - ML models (especially SVM and Random Forest) were more resilient to DP noise and data
   corruption than the threshold baseline.
